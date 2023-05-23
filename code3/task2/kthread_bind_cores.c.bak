@@ -1,0 +1,53 @@
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/init.h>
+#include <linux/kthread.h>
+#include <linux/sched.h>
+#include <linux/delay.h>
+
+static int number = 0; 
+static struct task_struct **bind_threads = NULL;
+
+static int MyPrintk(void *data)
+{
+    while (!kthread_should_stop())
+    {
+        int cpu = get_cpu();
+        put_cpu();
+        printk("kthread bind_kthread_%d %s is running on cpu %d\n",cpu+1 current->comm, cpu);
+        msleep(2000);
+    }
+    return 0;
+}
+
+static int __init init_kthread(void)
+{
+    int i;
+    number = num_online_cpus(); 
+    for (i = 0; i < number; i++)
+    {
+        bind_threads[i] = kthread_create(MyPrintk, NULL, "bind_thread_%d",i+1);
+        kthread_bind(bind_threads[i], i);
+        wake_up_process(bind_threads[i]);
+        printk("kthread bind_kthread_%d start\n", i);
+    }
+    return 0;
+}
+
+static void __exit exit_kthread(void)
+{
+    int i;
+    for (i = 0; i < number; i++)
+    {
+        if (bind_threads[i])
+        {
+            kthread_stop(bind_threads[i]);
+            printk("Stopped thread on CPU %d\n", i);
+        }
+    }
+    kfree(bind_threads);
+}
+
+module_init(init_kthread);
+module_exit(exit_kthread);
+MODULE_LICENSE("GPL");
